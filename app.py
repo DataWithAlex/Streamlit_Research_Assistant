@@ -13,7 +13,7 @@ if 'past' not in st.session_state:
     st.session_state['past'] = []
 if 'messages' not in st.session_state:
     st.session_state['messages'] = [
-        {"role": "system", "content": "Your name is ResearchPaperGPT and your goal is to help the user understand the research paper that is inputted. "},
+        {"role": "system", "content": "Your name is ResearchPaperGPT and your goal is to help the user understand the research paper that is inputted. The first set of inputs are going to have the following data structure. each page of a .pdf is going to br given at once. memorize this information and prepare yourself to answer questions from a user. Once all of the pieces of the pdf. are given. You are going to print a few paragraphs. The title of the paper, The authors of the paper, the summarized abstraction of the paper. And a small summary of every page of the paper. Then ask the user if they have any additional questions."},
     ]   
 if 'model_name' not in st.session_state:
     st.session_state['model_name'] = []
@@ -23,6 +23,47 @@ if 'total_tokens' not in st.session_state:
     st.session_state['total_tokens'] = []
 if 'total_cost' not in st.session_state:
     st.session_state['total_cost'] = 0.0
+# Added paper_summary variable. 
+if 'paper_summary' not in st.session_state:
+    st.session_state['paper_summary'] = [
+        {"role": "system", "content": "Your name is ResearchPaperGPT and your goal is to help the user understand the research paper that is inputted. You are going to receive the paper a page at a time. Your task is to summarize each page into 2 paragraphs."}
+   ]
+
+
+
+
+# Sidebar - let user choose model, show total cost of current conversation, and let user clear the current conversation
+st.sidebar.title("Sidebar")
+model_name = st.sidebar.radio("Choose a model:", ("GPT-3.5", "GPT-4"))
+counter_placeholder = st.sidebar.empty()
+counter_placeholder.write(f"Total cost of this conversation: ${st.session_state['total_cost']:.5f}")
+clear_button = st.sidebar.button("Clear Conversation", key="clear")
+
+api_key = st.sidebar.text_input('Enter your OpenAI API key')
+
+# Set org ID and API key
+#openai.organization = "<YOUR_OPENAI_ORG_ID>"
+openai.api_key = api_key
+
+
+# Map model names to OpenAI model IDs
+if model_name == "GPT-3.5":
+    model = "gpt-3.5-turbo"
+else:
+    model = "gpt-4"
+
+
+def paper_summary(text):
+        st.session_state['paper_summary'].append({"role": "user", "content": text})
+        
+        completion = completion = openai.ChatCompletion.create(
+        model=model,
+        messages=st.session_state['paper_summary']
+    )
+        response = completion.choices[0].message.content
+        #st.session_state['messages'].append({"role": "assistant", "content": response})
+        st.session_state['paper_summary'][-1] = {"role": "assistant", "content": response}
+        st.session_state['generated'].append(response)
 
 
 
@@ -37,31 +78,17 @@ if uploaded_file is not None:
     for page in pdf_reader.pages:
         text = page.extract_text()
         if text:
-            st.session_state['messages'].append({"role": "system", "content": text})
+            #paper_summary(text)
+
+             st.session_state['messages'].append({"role": "system", "content": text})
+        
 
 
 
 
-api_key = st.sidebar.text_input('Enter your OpenAI API key')
-
-# Set org ID and API key
-#openai.organization = "<YOUR_OPENAI_ORG_ID>"
-openai.api_key = api_key
 
 
-# Sidebar - let user choose model, show total cost of current conversation, and let user clear the current conversation
-st.sidebar.title("Sidebar")
-model_name = st.sidebar.radio("Choose a model:", ("GPT-3.5", "GPT-4"))
-counter_placeholder = st.sidebar.empty()
-counter_placeholder.write(f"Total cost of this conversation: ${st.session_state['total_cost']:.5f}")
-clear_button = st.sidebar.button("Clear Conversation", key="clear")
 
-
-# Map model names to OpenAI model IDs
-if model_name == "GPT-3.5":
-    model = "gpt-3.5-turbo"
-else:
-    model = "gpt-4"
 
 
 
@@ -69,8 +96,6 @@ else:
 MAX_CONTEXT_LENGTH = 3900
 max_tokens = 3900
 
-
-import PyPDF2
 
 
 
@@ -86,6 +111,9 @@ if clear_button:
     st.session_state['cost'] = []
     st.session_state['total_cost'] = 0.0
     st.session_state['total_tokens'] = []
+    # Adding an additional GPT3.5 Conversation to summarize each page
+    st.session_state['paper_summary'] = []
+
     counter_placeholder.write(f"Total cost of this conversation: ${st.session_state['total_cost']:.5f}")
 
 
@@ -106,59 +134,17 @@ def generate_response(prompt):
     completion_tokens = completion.usage.completion_tokens
     return response, total_tokens, prompt_tokens, completion_tokens
 
-# def generate_summary_response(prompt):
-#     st.session_state['messages'].append({"role": "user", "content": prompt})
 
-#     completion = openai.ChatCompletion.create(
-#         model=model,
-#         messages=st.session_state['messages']
-#     )
-#     response = completion.choices[0].message.content
-#     st.session_state['messages'].append({"role": "assistant", "content": response})
 
-#     # print(st.session_state['messages'])
-#     total_tokens = completion.usage.total_tokens
-#     prompt_tokens = completion.usage.prompt_tokens
-#     completion_tokens = completion.usage.completion_tokens
-#     return response, total_tokens, prompt_tokens, completion_tokens
+
+
+    
 
 
 # container for chat history
 response_container = st.container()
 # container for text box
 container = st.container()
-
-# uploaded_file = st.file_uploader("Upload PDF file", type=["pdf"])
-# if uploaded_file is not None:
-#     pdf_reader = PyPDF2.PdfReader(uploaded_file)
-
-#     # Read in each page of the PDF and store the text in a list
-#     pages = []
-#     page_count = len(pdf_reader.pages)
-#     page_limit = 1  # set a limit on the number of pages to process at once
-
-#     for i in range(0, page_count, page_limit):
-#         pages = []
-#         # Read in each page of the PDF and store the text in the messages list
-#         for page in pdf_reader.pages[i:i+page_limit]:
-#             text = page.extract_text()
-
-#             generate_summary_response(text)
-
-#             response = completion.choices[0].text
-#             st.session_state['messages'].append({"role": "system", "content": response})
-
-#             if text:
-#                 pages.append(text)
-
-#             generate_response(text)
-
-           
-
-#         # send the pages to the OpenAI API
-
-#         response = completion.choices[0].text
-#         st.session_state['messages'].append({"role": "assistant", "content": response})
 
 
 with container:
